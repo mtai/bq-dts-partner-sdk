@@ -11,7 +11,7 @@ You will need to do the following:
 2. Enable the following APIs in the [Google Developers Console](https://console.developers.google.com/project/_/apiui/apiview/pubsub/overview).
     * BigQuery Data Transfer API
     * Cloud Pub/Sub API
-    
+
     ```
     gcloud services enable bigquerydatatransfer.googleapis.com
     gcloud services enable pubsub.googleapis.com
@@ -21,24 +21,26 @@ You will need to do the following:
     1. Creates a new Service Account named `bq-dts-[SOURCE]@[PROJECT_ID].iam.gserviceaccount.com`
     2. Grants roles `bigquery.admin`, `pubsub.subscriber`, `storage.objectAdmin`
     3. Downloads a Service-Account key called `.gcp-service-account.json`
-    
+
     ```
     SOURCE="example-calendar" # REPLACE THIS VARIABLE
     PROJECT_ID=$(gcloud config get-value core/project)
     PARTNER_SA_NAME="bq-dts-${SOURCE}"
     PARTNER_SA_EMAIL="${PARTNER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-    
+
     # Creating a Service Account
-    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME} 
-    
+    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME}
+
      # Granting Service Account required roles
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/bigquery.admin'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/pubsub.subscriber'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/storage.objectAdmin'
-    
-    
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/editor'
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/pubsub.editor'
+
+
     # Optionally create service account credentials
-    gcloud iam service-accounts keys create --iam-account "${SERVICE_ACCOUNT_EMAIL}" .gcp-service-account.json
+    gcloud iam service-accounts keys create --iam-account "${PARTNER_SA_EMAIL}" .gcp-service-account.json
     ```
 
 4. Grant permissions to a GCP-managed Service Account
@@ -48,12 +50,12 @@ You will need to do the following:
     ```
     PROJECT_ID=$(gcloud config get-value core/project)
     GCP_SA_EMAIL="connectors@bigquery-data-connectors.iam.gserviceaccount.com"
-    
+
     # Creating a custom role
     gcloud iam roles create bigquerydatatransfer.connector --project ${PROJECT_ID} --title "BigQuery Data Transfer Service Connector" --description "Custom role for GCP-managed Service Account for BQ DTS" --permissions "clientauthconfig.clients.getWithSecret" --stage ALPHA
-    
+
     # Granting Service Account required roles
-    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role='projects/${PROJECT_ID}/roles/bigquerydatatransfer.connector'
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="projects/${PROJECT_ID}/roles/bigquerydatatransfer.connector"
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role='roles/pubsub.admin'
     ```
 
@@ -112,7 +114,7 @@ Prior to using the below examples, ensure you have set the following environment
 
     # Production
     python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run --use-bq-dts example/imported_data_info.yaml
-  
+
 
 ## Running locally on Mac OS X (no K8s)
 ### Install dependencies
@@ -132,7 +134,7 @@ Prior to using the below examples, ensure you have set the following environment
     ZONE=us-central1-b
     ADDITIONAL_ZONES=us-central1-c,us-central1-f
     MACHINE_TYPE=f1-micro
-    
+
     gcloud config set compute/zone ${ZONE}
     gcloud beta container clusters create ${NAME} --zone ${ZONE} --additional-zones ${ADDITIONAL_ZONES} --machine-type ${MACHINE_TYPE} --num-nodes=1 --enable-autoupgrade --enable-autorepair
 
@@ -154,7 +156,7 @@ Prior to using the below examples, ensure you have set the following environment
 
     IMAGE_NAME=bq-dts-partner-connector
     IMAGE_VERSION=$(date +"%Y%m%d-%H%M")
-    
+
     PROJECT_ID="$(gcloud config get-value project)"
     REGISTRY_PREFIX="gcr.io/${PROJECT_ID/://}"
     REGISTRY_IMAGE=${REGISTRY_PREFIX}/${IMAGE_NAME}
@@ -202,7 +204,7 @@ Prior to using the below examples, ensure you have set the following environment
     GCP_SERVICE_ACCOUNT_CREDS=.gcp-service-account.json
     BQ_DTS_PARTNER_CONNECTOR_CONFIG=example/imported_data_info.yaml
     K8_DEPLOYMENT=kube-deploy.minikube.yaml
-    
+
     kubectl delete secret bq-dts-partner-connector-service-account || true
     kubectl create secret generic bq-dts-partner-connector-service-account --from-file ${GCP_SERVICE_ACCOUNT_CREDS}
     kubectl delete configmap bq-dts-partner-connector-config || true
