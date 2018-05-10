@@ -1,0 +1,17 @@
+# https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#transferrun
+# Minimal TransferRun for testing purposes
+data_source_id: data-source-guid
+destination_dataset_id: dts_example
+name: projects/0000000000/locations/us/transferConfigs/sample-transferconfig-guid/runs/sample-transferrun-guid
+params:
+  fields:
+    max_date: {string_value: '1901-01-01'}
+    max_num: {string_value: '1000'}
+    min_date: {string_value: '1900-01-01'}
+    min_num: {string_value: '0'}
+run_time: {seconds: 1525046400}
+schedule: every 24 hours
+schedule_time: {nanos: 812663000, seconds: 1525216998}
+state: PENDING
+update_time: {nanos: 899924000, seconds: 1525216998}
+user_id: 1234567890

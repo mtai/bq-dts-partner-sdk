@@ -1,0 +1,48 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: bq-dts-partner-connector
+  labels:
+    app: bq-dts-partner-connector
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: bq-dts-partner-connector
+    spec:
+      containers:
+      - name: bq-dts-partner-connector
+
+        # TODO - See how we can parameterize image and imagePullPolicy
+        image: bq-dts-partner-connector
+        imagePullPolicy: IfNotPresent
+        # TODO - See how we can parameterize image and imagePullPolicy
+
+        args: ["$(BQ_DTS_PARTNER_CONNECTOR_CONFIG)"]
+        env:
+          - name: GOOGLE_APPLICATION_CREDENTIALS
+            value: /var/run/secrets/cloud.google.com/.gcp-service-account.json
+          - name: BQ_DTS_PARTNER_CONNECTOR_CONFIG
+            value: /etc/bq-dts-partner-connector/config.yaml
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 100m
+          limits:
+            memory: 128Mi
+            cpu: 200m
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/bq-dts-partner-connector
+            readOnly: true
+          - name: secret-volume
+            mountPath: /var/run/secrets/cloud.google.com
+            readOnly: true
+      volumes:
+      - name: config-volume
+        configMap:
+          name: bq-dts-partner-connector-config
+      - name: secret-volume
+        secret:
+          secretName: bq-dts-partner-connector-service-account
