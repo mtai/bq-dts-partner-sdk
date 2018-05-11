@@ -58,6 +58,16 @@ You will need to do the following:
 
 5. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
 
+## Running locally on Mac OS X (no K8s)
+### Install dependencies
+
+
+    # Requires Python 3.6
+    brew install python3
+    virtualenv env --python /usr/local/bin/python3.6
+    source env/bin/activate
+    pip install -r requirements.txt
+
 ## Understanding the BigQuery Data Transfer Service SDK example
 
 * example/calendar_connector.py - Implementation of a BQ DTS connector
@@ -81,7 +91,7 @@ Prior to using the below examples, ensure you have set the following environment
 
 * GOOGLE_APPLICATION_CREDENTIALS={path-to/.gcp-service-account.json}
 * GOOGLE_CLOUD_PROJECT={project-id}
-
+* PYTHONPATH=<path_to_folder>
 
 ### Working with Data Source Definitions
 
@@ -107,15 +117,6 @@ Prior to using the below examples, ensure you have set the following environment
     python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run --use-bq-dts example/imported_data_info.yaml
 
 
-## Running locally on Mac OS X (no K8s)
-### Install dependencies
-
-
-    # Requires Python 3.6
-    brew install python3
-    virtualenv env --python /usr/local/bin/python3.6
-    source env/bin/activate
-    pip install -r requirements.txt
 
 ## Building remotely on GKE-managed K8s cluster
 ### Create a GKE-managed K8s Cluster
