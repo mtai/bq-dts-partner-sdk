@@ -116,7 +116,7 @@ class CalendarConnector(base_connector.BaseConnector):
         assert INTEGER_MIN <= max_num <= INTEGER_MAX
         assert min_num <= max_num
 
-        return transfer_run_params
+        return dict(min_date=min_date, max_date=max_date, min_num=min_num, max_num=max_num)
 
     def stage_tables_locally(self, run_ctx: base_connector.ManagedTransferRun=None, local_prefix=None)\
             -> List[base_connector.TableContext]:

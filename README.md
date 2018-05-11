@@ -68,7 +68,7 @@ You will need to do the following:
 
 * example/data_source_definition.yaml - [YAML representation of a DataSourceDefinition](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasourcedefinition)
     * Required for one-time setup of a DataSourceDefinition
-    * Used in conjunction with bq_dts/bin/data_source_definition.py
+    * Used in conjunction with bin/data_source_definition.py
 
 * example/transfer_run.yaml - [YAML representation of a TransferRun](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#transferrun)
     * \[DEV ONLY\] Mimics what would be received via a Pub/Sub subscription
@@ -87,22 +87,16 @@ Prior to using the below examples, ensure you have set the following environment
 ### Working with Data Source Definitions
 
     # Create
-    python bq_dts/bin/data_source_definition.py --project-id {project-id} --location-id us --body-yaml example/data_source_definition.yaml create
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --body-yaml example/data_source_definition.yaml create
 
     # List
-    python bq_dts/bin/data_source_definition.py --project-id {project-id} --location-id us list
+    python bin/data_source_definition.py --project-id {project_id} --location-id us list
 
     # Get
-    python bq_dts/bin/data_source_definition.py --dsd-name {dsd-name} get
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} get
 
     # Patch
-    python bq_dts/bin/data_source_definition.py --dsd-name {dsd-name} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/data_source_definition.yaml patch
-
-
-### Enrolling in a data source for testing purposes
-
-    # Enroll in the Data Source
-    python bq_dts/bin/data_source_definition.py --project-id {project-id} --location-id us --dsd-name {dsd-name} enroll
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/data_source_definition.yaml patch
 
 
 ### Running the example app, serving BQ DTS requests

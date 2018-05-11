@@ -31,7 +31,10 @@ BQ_DTS_API_ENDPOINT = 'bigquerydatatransfer'
 BQ_DTS_API_VERSION = 'v1'
 
 TRANSFER_RUN_NAME_PARSER = re.compile('projects/(.*?)/locations/(.*?)/transferConfigs/(.*?)/runs/(.*?)')
+TRANSFER_RUN_NAME_FORMATTER = 'projects/{project_id}/locations/{location_id}/transferConfigs/{config_id}/runs/{run_id}'
+
 DATA_SOURCE_DEFINITION_NAME_PARSER = re.compile('projects/(.*?)/locations/(.*?)/dataSourceDefinitions/(.*?)')
+DATA_SOURCE_DEFINITION_NAME_FORMATTER = 'projects/{project_id}/locations/{location_id}/dataSourceDefinitions/{data_source_id}'
 
 BQ_DTS_PARTNER_API_DISCOVERY_DOC_PATH = os.path.join(
     os.path.dirname(__file__), 'api_discovery.json'

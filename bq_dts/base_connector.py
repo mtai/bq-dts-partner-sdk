@@ -78,8 +78,8 @@ from bq_dts import helpers
 
 yaml = YAML(typ='safe')
 
-DEFAULT_TRANSFER_RUN_TIMEOUT_SECS = 60.0 * 60.0 # 1 hour
-DEFAULT_UPDATE_INTERVAL_SECS = 60               # 1 minute
+MAX_TRANSFER_RUN_SECONDS = 12 * 60.0 * 60.0 # 12 hours
+DEFAULT_UPDATE_INTERVAL_SECS = 60                    # 1 minute
 
 # https://cloud.google.com/storage/docs/bucket-locations#available_locations
 BQ_DTS_LOCATION_TO_GCS_LOCATION_MAP = {
@@ -142,7 +142,7 @@ class ManagedTransferRun(object):
     logger_cls = TransferRunLogger
 
     def __init__(self, transfer_run=None, dts_client=None, logger=None,
-                 update_interval=DEFAULT_UPDATE_INTERVAL_SECS, timeout=DEFAULT_TRANSFER_RUN_TIMEOUT_SECS):
+                 update_interval=DEFAULT_UPDATE_INTERVAL_SECS, timeout=MAX_TRANSFER_RUN_SECONDS):
         self.transfer_run = transfer_run
         self.dts_client = dts_client
 
@@ -150,6 +150,7 @@ class ManagedTransferRun(object):
         self.name = transfer_run['name']
         self.data_source_id = transfer_run['data_source_id']
         self.project_id, self.location_id, self.config_id, self.run_id = rest_client.parse_transfer_run_name(self.name)
+        self.time_start_processing = datetime.datetime.utcnow()
 
         # Setup logging
         self.logger = logger
@@ -169,16 +170,10 @@ class ManagedTransferRun(object):
 
     def _update_bq_dts(self):
         """
-        Periodically send updates to BQ DTS
-
-        #1) Send BQ DTS transferMessages queued up on self.run_logger
-        #2) Ensures at least 1 message is sent so DataSource.update_deadline_seconds gets reset
+        Periodically flush self.run_logger to BQ DTS TransferRun.LogMessages
 
         :return:
         """
-        if not self._log_handler.msgs:
-            self.run_logger.info('Processing... next update within {self._timer_update_bq_dts.interval} second(s)')
-
         if self.dts_client and self._log_handler.msgs:
             self.dts_client.transfer_run_log_messages(self.name, body=dict(transferMessages=self._log_handler.msgs))
 
@@ -225,9 +220,6 @@ class ManagedTransferRun(object):
 
         # Step 4 - Log the exception to the run
         is_exception = bool(exc_type or exc or exc_tb)
-        if is_exception:
-            traceback_as_strs = traceback.format_exception(exc_type, exc, exc_tb)
-            self.run_logger.error(''.join(traceback_as_strs))
 
         # Step 5 - Notify BQ DTS of run completion
         if self.dts_client:
@@ -349,11 +341,12 @@ class BaseConnector(object):
         # Args used for production workloads
         self._parser.add_argument('--ps-subname', dest='ps_subname',
                                   help='Subscription name in the format of "bigquerydatatransfer.{data_source_id}.{location_id}.run"')
-        self._parser.add_argument('--ps-max-messages', dest='ps_max_messages', type=int, default=1,
-                                  help='Max messages to process at once')
 
-        self._parser.add_argument('--transfer-run-timeout', dest='transfer_run_timeout', type=int, default=DEFAULT_TRANSFER_RUN_TIMEOUT_SECS,
-                                  help='Seconds a TransferRun can stay alive before raising a TimeoutError.')
+        self._parser.add_argument('--max-transfer-runs', dest='max_transfer_runs', type=int, default=sys.maxsize,
+                                  help='Max number of TransferRuns before gracefully shutting down this process')
+        self._parser.add_argument('--max-transfer-run-seconds', dest='max_transfer_run_seconds', type=int, default=MAX_TRANSFER_RUN_SECONDS,
+                                  help='Max seconds we can spend processing a TransferRun before raising a TimeoutError')
+
         self._parser.add_argument('--update-interval', dest='update_interval', type=int, default=DEFAULT_UPDATE_INTERVAL_SECS,
                                   help='Seconds between updates sent to BQ DTS.  Should be <= DataSource.update_deadline_seconds')
 
@@ -374,7 +367,7 @@ class BaseConnector(object):
 
         # Step 4 - Sanity check our args
         assert not (self._is_testing and self._opts.use_bq_dts), 'Cannot be testing while simultaneously using BQ DTS APIs'
-        assert self._opts.update_interval <= self._opts.transfer_run_timeout
+        assert self._opts.update_interval <= self._opts.max_transfer_run_seconds
     ##### END - Methods to script init options #####
 
 
@@ -400,7 +393,7 @@ class BaseConnector(object):
 
         # Step 3 - Setup a ManagedTransferRun
         with ManagedTransferRun(current_run, dts_client=self.dts_client, logger=self.logger,
-            update_interval=self._opts.update_interval, timeout=self._opts.transfer_run_timeout) as run_ctx:
+            update_interval=self._opts.update_interval, timeout=self._opts.max_transfer_run_seconds) as run_ctx:
             self.process_transfer_run(run_ctx)
 
     def trigger_via_pubsub(self):
@@ -410,7 +403,7 @@ class BaseConnector(object):
 
         # Step 2 - Setup the Subscription-specific callback, listening for 1 message at a time
         # https://google-cloud-python.readthedocs.io/en/latest/pubsub/subscriber/index.html#pulling-a-subscription
-        default_fc = pubsub.types.FlowControl(max_messages=1, max_lease_duration=self._opts.transfer_run_timeout)
+        default_fc = pubsub.types.FlowControl(max_messages=1, max_lease_duration=self._opts.max_transfer_run_seconds)
         future = self.ps_sub_client.subscribe_experimental(sub_path,
             callback=self.pubsub_callback, flow_control=default_fc)
 
@@ -431,7 +424,7 @@ class BaseConnector(object):
         retry_transfer_run = False
         try:
             with ManagedTransferRun(current_run, dts_client=self.dts_client, logger=self.logger,
-                update_interval=self._opts.update_interval, timeout=self._opts.transfer_run_timeout) as run_ctx:
+                update_interval=self._opts.update_interval, timeout=self._opts.max_transfer_run_seconds) as run_ctx:
                 self.process_transfer_run(run_ctx)
         except errors.HttpError as dts_api_error:
             # Step 4a - If there's an unrecoverable BQ DTS API error...
@@ -493,8 +486,11 @@ class BaseConnector(object):
         :param run_ctx:
         :return:
         """
-        # Step 1 - Stage local tables @ /tmp/{data_source_id}/{config_id}
-        local_prefix = self._opts.local_tmpdir.joinpath(run_ctx.data_source_id, run_ctx.config_id)
+        # Step 1 - Stage local tables @ /tmp/{data_source_id}/{config_id}/{run_id}/{YYYYMMDD-HHMMSS}
+        local_prefix = self._opts.local_tmpdir.joinpath(
+            run_ctx.data_source_id, run_ctx.config_id, run_ctx.run_id,
+            run_ctx.time_start_processing.strftime('%Y%m%d-%H%M%S')
+        )
 
         self.logger.info(f'[{run_ctx.name}] Staging local => {local_prefix}')
         local_table_ctxs = self.stage_tables_locally(run_ctx, local_prefix=local_prefix)
@@ -539,7 +535,7 @@ class BaseConnector(object):
 
         table_name => Substituted from current_run (e.g. from mytable_{params.CustomerID}${run_date})
         tabledef => from self._idi_config[tabledef_name]
-        urs => URIs to source files in GCS
+        uris => URIs to local files.  Wildcards are not expanded
         """
         raise NotImplementedError
     ##### END - Methods to stage requested data #####
@@ -555,15 +551,20 @@ class BaseConnector(object):
             table_idi = current_table_ctx.to_ImportedDataInfo()
             current_run_idis.append(table_idi)
 
-        body = dict()
-        body['importedData'] = current_run_idis
-        body['userCredentials'] = None # TODO - Is this required?
+        body = dict(importedData=current_run_idis)
 
         # Step 2 - Trigger a single startBigQueryJobs call
         self.logger.info(f'[{run_ctx.name}] BQ DTS ; Starting BigQuery Jobs')
         run_ctx.dts_client.transfer_run_start_big_query_jobs(run_ctx.name, body=body)
 
     def start_bigquery_jobs_via_bq_apis(self, run_ctx: ManagedTransferRun, gcs_table_ctxs: List[TableContext]):
+        """
+        Development only method.  Used to validate schema configuration and loading into BigQuery.
+        Re-uses and re-interprets table schema as defined in "imported_data_info.yaml"
+        :param run_ctx:
+        :param gcs_table_ctxs:
+        :return:
+        """
         # Step 1 - Ensure the target Dataset exists
         dataset_id = run_ctx.transfer_run['destination_dataset_id']
 

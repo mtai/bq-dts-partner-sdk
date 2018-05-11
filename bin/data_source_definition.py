@@ -9,6 +9,10 @@ from bq_dts import rest_client
 
 yaml = YAML(typ='safe')
 
+def _format_dsd(opts):
+    return rest_client.DATA_SOURCE_DEFINITION_NAME_FORMATTER.format(**opts.__dict__)
+
+
 class CommandLinePartnerDTSClient(object):
     ##### BEGIN - Methods to script init options #####
     def __init__(self, credentials=None):
@@ -24,7 +28,7 @@ class CommandLinePartnerDTSClient(object):
         self._parser.add_argument('method')
         self._parser.add_argument('--project-id', dest='project_id')
         self._parser.add_argument('--location-id', dest='location_id')
-        self._parser.add_argument('--dsd-name', dest='dsd_name')
+        self._parser.add_argument('--data-source-id', dest='data_source_id')
         self._parser.add_argument('--update-mask', dest='update_mask')
         self._parser.add_argument('--page-token', dest='page_token')
 
@@ -52,14 +56,14 @@ class CommandLinePartnerDTSClient(object):
             resp = self._dts_client.data_source_definition_list(
                 project_id=self._opts.project_id, location_id=self._opts.location_id, page_token=self._opts.page_token)
         elif self._opts.method == 'get':
-            resp = self._dts_client.data_source_definition_get(name=self._opts.dsd_name)
+            assert self._opts.data_source_id
+            name = _format_dsd(self._opts)
+            resp = self._dts_client.data_source_definition_get(name=name)
         elif self._opts.method == 'patch':
+            assert self._opts.data_source_id
+            name = _format_dsd(self._opts)
             resp = self._dts_client.data_source_definition_patch(
-                name=self._opts.dsd_name, update_mask=self._opts.update_mask, body=self._body)
-        elif self._opts.method == 'enroll':
-            body = dict(dataSourceIds=[self._opts.dsd_name])
-            resp = self._dts_client.enroll_data_sources(
-                project_id=self._opts.project_id, location_id=self._opts.location_id, body=body)
+                name=name, update_mask=self._opts.update_mask, body=self._body)
 
         else:
             raise NotImplementedError
