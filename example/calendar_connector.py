@@ -99,10 +99,11 @@ class CalendarConnector(base_connector.BaseConnector):
     # Prod
     python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run --use-bq-dts example/imported_data_info.yaml
     """
-    TRANSFER_RUN_REQUIRED_PARAMS = {'min_date', 'max_date', 'min_num', 'max_num'}
-    TRANSFER_RUN_INTEGER_PARAMS = ['min_num', 'max_num']
-
     def validate_transfer_run_params(self, transfer_run_params):
+        """
+        Validate and re-write parameters if needed
+
+        """
         min_date = yyyymmdd_to_date(transfer_run_params['min_date'])
         max_date = yyyymmdd_to_date(transfer_run_params['max_date'])
         assert min_date <= max_date
@@ -139,20 +140,23 @@ class CalendarConnector(base_connector.BaseConnector):
     @base_connector.table_stager('date_greg')
     def generate_date(self, run_ctx, local_prefix):
         """
-        Generate dates between min_date and max_date inclusive as passed via the TransferRun
+        Generate a series of consecutive dates via datetime_to_date_dict()
 
-        :return:
+        Between 'min_date' and 'max_date'
         """
         # Step 1 - Read parameters from the Transfer Run
         raw_params = run_ctx.transfer_run['params']
         min_date = raw_params['min_date']
         max_date = raw_params['max_date']
 
-        # Step 2 - Setup local output paths
+        # Step 2 - Let the customer know we've started pulling data on this table
+        run_ctx.run_logger.info(f'Fetching dates between {min_date} and {max_date}')
+
+        # Step 3 - Setup local output paths
         output_uri = local_prefix.joinpath('date_greg', 'data.json.gz')
         output_uri.dirname().makedirs_p()
 
-        # Step 3 - Instead of calling APIs, programmatically generate tables
+        # Step 4 - Instead of calling APIs, programmatically generate tables
         offset_one_day = datetime.timedelta(days=1)
         current_date = min_date
         with helpers.GzippedJSONWriter(output_uri) as output_file:
@@ -166,13 +170,21 @@ class CalendarConnector(base_connector.BaseConnector):
     # Use "time" table configuration from imported_data_info config
     @base_connector.table_stager('time')
     def generate_time(self, run_ctx, local_prefix):
+        """
+        Generate every second via datetime_to_time_dict()
+
+        Between 00:00:00 and 23:59:59
+        """
         # Step 1 - Setup local output paths
         output_uri = local_prefix.joinpath('time', 'data.json.gz')
         output_uri.dirname().makedirs_p()
 
+        # Step 2 - Let the customer know we've started pulling data on this table
+        run_ctx.run_logger.info(f'Fetching times between 00:00:00 and 23:59:59')
+
         offset_one_second = datetime.timedelta(seconds=1)
 
-        # Step 2 - Instead of calling APIs, programmatically generate tables
+        # Step 3 - Instead of calling APIs, programmatically generate tables
         today = datetime.datetime.today()
         with helpers.GzippedJSONWriter(output_uri) as output_file:
             current_datetime = today.replace(hour=0, minute=0, second=0)
@@ -186,17 +198,25 @@ class CalendarConnector(base_connector.BaseConnector):
     # Use "num_999999" configuration from imported_data_info config
     @base_connector.table_stager('num_999999')
     def generate_integer(self, run_ctx, local_prefix):
+        """
+        Generate a series of consecutive integers via number_to_dict()
+
+        Between 'min_num' and 'max_num'
+        """
         # Step 1 - Read parameters from the Transfer Run
         raw_params = run_ctx.transfer_run['params']
 
         min_num = raw_params['min_num']
         max_num = raw_params['max_num']
 
-        # Step 2 - Setup local output paths
+        # Step 2 - Let the customer know we've started pulling data on this table
+        run_ctx.run_logger.info(f'Fetching numbers between {min_num} and {max_num}')
+
+        # Step 3 - Setup local output paths
         output_uri = local_prefix.joinpath('num_999999', 'data.json.gz')
         output_uri.dirname().makedirs_p()
 
-        # Step 3 - Instead of calling APIs, programmatically generate tables
+        # Step 4 - Instead of calling APIs, programmatically generate tables
         with helpers.GzippedJSONWriter(output_uri) as output_file:
             for x in range(min_num, max_num + 1):
                 output_file.write(number_to_dict(x))

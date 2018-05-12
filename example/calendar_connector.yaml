@@ -1,0 +1,207 @@
+# https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasourcedefinition
+data_source_definition:
+  # For each TransferRun,  "run_time" = "schedule_time" + "run_time_offset"
+  run_time_offset:
+    seconds: -86400
+  support_email: bq-dts-support+calendar@google.com
+
+  # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rest/v1/projects.locations/list
+  supported_location_ids:
+  - us
+  - europe
+  - asia-northeast1
+
+  # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasource
+  data_source:
+    display_name: Calendar
+    description: Calendar Data Source
+    help_url: https://en.wikipedia.org/wiki/Gregorian_calendar
+
+    # Automatically mark a TransferRun as FAILED if "update_deadline_seconds" elapses without an "update"... "update" can be triggered below
+    # NOTE - This is effectively 2 deadlines in 1
+    ### Deadline 1 - Amount of time a Pub/Sub Message can sit in a Subscription without any worker processing it
+    ### Deadline 2 - Once a worker begins work on a TransferRun, the time within which BQ DTS needs to be updated
+
+    # An "update" is defined as either...
+    # * UpdateTransferRun - https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#updatetransferrunrequest
+    # * LogTransferRunMessages - https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#logtransferrunmessagesrequest
+    # EXAMPLE - Allow 4 hours for our Data Source to respond
+    update_deadline_seconds: 14400
+
+    ### Scheduling
+    default_schedule: every 24 hours
+    supports_custom_schedule: true
+    minimum_schedule_interval:
+      seconds: 86400
+    manual_runs_disabled: false
+
+    # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#authorizationtype
+    authorization_type: AUTHORIZATION_CODE
+
+    # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datarefreshtype
+    data_refresh_type: DATA_REFRESH_TYPE_UNSPECIFIED
+
+    # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasourceparameter
+    parameters:
+    - param_id: min_date
+      display_name: Minimum Date
+      description: Minimum Date for the 'date_greg' table.
+      type: STRING
+      required: true
+      validation_regex: \d{4}-\d{2}-\d{2}
+      validation_description: Invalid date, please specify in 'YYYY-MM-DD' format.
+      validation_help_url: https://en.wikipedia.org/wiki/Date_format_by_country
+    - param_id: max_date
+      display_name: Maximum Date
+      description: Maximum Date for the 'date_greg' table in 'YYYY-MM-DD' format.
+      type: STRING
+      required: true
+      validation_regex: \d{4}-\d{2}-\d{2}
+      validation_description: Invalid date, please specify in 'YYYY-MM-DD' format.
+      validation_help_url: https://en.wikipedia.org/wiki/Date_format_by_country
+    - param_id: min_num
+      display_name: Minimum number
+      description: Minimum number for the 'num_XXX' table.
+      # Integer parameter (64-bits). Will be serialized to json as string.
+      type: INTEGER
+      required: true
+      min_value: 0
+      max_value: 999999
+      validation_help_url: https://en.wikipedia.org/wiki/Integer
+    - param_id: max_num
+      display_name: Maximum number
+      description: Maximum number for the 'num_XXX' table.
+      # Integer parameter (64-bits). Will be serialized to json as string.
+      type: INTEGER
+      required: true
+      min_value: 0
+      max_value: 999999
+      validation_help_url: https://en.wikipedia.org/wiki/Integer
+
+imported_data_info:
+  # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#importeddatainfo
+  date_greg:
+    destination_table_id_template: date_greg${run_yyyymmmdd}
+    destination_table_description: 1582-10-15 - 2199-12-31 inclusive
+    table_defs:
+      - format: JSON
+        max_bad_records: 0
+        encoding: UTF8
+        schema:
+          fields:
+            - field_name: date
+              type: DATE
+              description: Date as DATE - CAST('2000-12-31' AS DATE); [1582-10-15, 2199-12-31]
+            - field_name: date_str
+              type: STRING
+              description: Date as STRING - '20001231'
+            - field_name: date_int
+              type: INTEGER
+              description: Date as INTEGER - 20001231
+            - field_name: date_dash
+              type: STRING
+              description: Date as STRING - '2000-12-31'
+            - field_name: date_slash
+              type: STRING
+              description: Date as STRING - '2000/12/31'
+            - field_name: day
+              type: INTEGER
+              description: Day as Integer - [1, 31]
+            - field_name: day_abbr
+              type: STRING
+              description: Day as 3-letter STRING - [mon, tue, wed, thu, fri, sat, sun]
+            - field_name: dow_mon17
+              type: INTEGER
+              description: 1 = mon, 7 = sun ; https://en.wikipedia.org/wiki/ISO_week_date)
+            - field_name: dow_mon06
+              type: INTEGER
+              description: 0 = mon, 6 = sun
+            - field_name: dow_sun17
+              type: INTEGER
+              description: 1 = sun, 7 = sat
+            - field_name: dow_sun06
+              type: INTEGER
+              description: 0 = sun, 6 = sat
+            - field_name: week_mon
+              type: INTEGER
+              description: Week Number - First Monday - [0, 53]
+            - field_name: week_sun
+              type: INTEGER
+              description: Week Number - First Sunday - [0, 53]
+            - field_name: week_iso
+              type: INTEGER
+              description: Week Number - First Thursday (ISO) - [0, 53] ; https://en.wikipedia.org/wiki/ISO_week_date
+            - field_name: month
+              type: INTEGER
+              description: Month as Integer - [1, 12]
+            - field_name: month_abbr
+              type: STRING
+              description: Month as 3-letter STRING - [jan, feb, mar, apr, may, jun, jul, aug, sep, oct, nov, dec]
+            - field_name: month_first_day
+              type: DATE
+              description: First Day of Month as DATE - [2000-01-01, 2000-02-01, 2000-03-01, ..., 2000-12-01]
+            - field_name: quarter
+              type: INTEGER
+              description: Quarter as Integer - [1, 4]
+            - field_name: quarter_first_day
+              type: DATE
+              description: First Day of Quarter as DATE - [2000-01-01, 2000-04-01, 2000-07-01, 2000-10-01]
+            - field_name: half
+              type: INTEGER
+              description: Half as Integer - [1, 2]
+            - field_name: half_first_day
+              type: DATE
+              description: First Day of Half as DATE - [2000-01-01, 2000-07-01]
+            - field_name: year
+              type: INTEGER
+              description: Year as Integer - [1, 9999]
+            - field_name: year_iso
+              type: INTEGER
+              description: Year ISO ; https://en.wikipedia.org/wiki/ISO_week_date
+            - field_name: year_first_day
+              type: DATE
+              description: First Day of Year as DATE - [2000-01-01, 2001-01-01, 2002-01-01, ...]
+
+  time:
+    destination_table_id_template: time${run_yyyymmmdd}
+    destination_table_description: 00:00:00 - 23:59:59 inclusive
+    table_defs:
+      - format: JSON
+        max_bad_records: 0
+        encoding: UTF8
+        schema:
+          fields:
+            - field_name: time
+              type: TIME
+              description: Time as TIME - CAST('23:59:59' AS TIME)
+            - field_name: hour
+              type: INTEGER
+              description: Hour as INTEGER - [0, 23]
+            - field_name: minute
+              type: INTEGER
+              description: Minute as INTEGER - [0, 59]
+            - field_name: second
+              type: INTEGER
+              description: Second as INTEGER - [0, 59]
+            - field_name: second_in_day
+              type: INTEGER
+              description: Seconds as INTEGER - [0, 86399]; 00:00:00 = 0, 23:59:59 = 86399
+            - field_name: hour_ampm
+              type: INTEGER
+              description: Hour as INTEGER - [1, 12]
+            - field_name: is_pm
+              type: BOOLEAN
+              description: AM = False, PM = True
+
+  num_999999:
+    destination_table_id_template: num_999999${run_yyyymmmdd}
+    destination_table_description: 0 - 999999 inclusive
+    table_defs:
+      - format: JSON
+        max_bad_records: 0
+        encoding: UTF8
+        schema:
+          fields:
+            - field_name: num
+              type: INTEGER
+              description: Num as INTEGER - [0, 999999]

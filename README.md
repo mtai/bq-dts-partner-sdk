@@ -53,7 +53,7 @@ You will need to do the following:
 
     # Granting Service Account required roles
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="projects/${PROJECT_ID}/roles/bigquerydatatransfer.connector"
-    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role='roles/pubsub.admin'
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="roles/pubsub.admin"
     ```
 
 5. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
@@ -75,16 +75,17 @@ You will need to do the following:
     * Flushes log messages to BQ DTS every --update-interval seconds
     * Stages data to Google Cloud Storage before invoking BQ loads
 
-* example/data_source_definition.yaml - [YAML representation of a DataSourceDefinition](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasourcedefinition)
-    * Required for one-time setup of a DataSourceDefinition
-    * Used in conjunction with bin/data_source_definition.py
+* example/calendar_connector.yaml - Connector configuration file
+    * data_source_defintion - [YAML representation of a DataSourceDefinition](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasourcedefinition)
+        * Required for one-time setup of a DataSourceDefinition
+        * Used in conjunction with bin/data_source_definition.py
+    * imported_data_info - [Partial YAML representation of StartBigQueryJobsRequest.ImportedDataInfo](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#startbigqueryjobsrequest)
+        * Mapping of table name to table schemas
+        * `destination_table_id_template` is Python-formatted string used by `base_connector.templatize_table_name` and `base_connector.table_stager`
 
 * example/transfer_run.yaml - [YAML representation of a TransferRun](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#transferrun)
     * \[DEV ONLY\] Mimics what would be received via a Pub/Sub subscription
 
-* example/imported_data_info.yaml - [Partial YAML representation of StartBigQueryJobsRequest.ImportedDataInfo](https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#startbigqueryjobsrequest)
-    * Mapping of table name to table schemas
-    * `destination_table_id_template` is Python-formatted string used by `base_connector.templatize_table_name` and `base_connector.table_stager`
 
 ### Working with Google Cloud Platform auth
 Prior to using the below examples, ensure you have set the following environment variables
@@ -96,7 +97,7 @@ Prior to using the below examples, ensure you have set the following environment
 ### Working with Data Source Definitions
 
     # Create
-    python bin/data_source_definition.py --project-id {project_id} --location-id us --body-yaml example/data_source_definition.yaml create
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --body-yaml example/calendar_connector.yaml create
 
     # List
     python bin/data_source_definition.py --project-id {project_id} --location-id us list
@@ -105,16 +106,16 @@ Prior to using the below examples, ensure you have set the following environment
     python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} get
 
     # Patch
-    python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/data_source_definition.yaml patch
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/calendar_connector.yaml patch
 
 
 ### Running the example app, serving BQ DTS requests
 
     # Development
-    python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --transfer-run-yaml example/transfer_run.yaml example/imported_data_info.yaml
+    python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --transfer-run-yaml example/transfer_run.yaml example/calendar_connector.yaml
 
     # Production
-    python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run --use-bq-dts example/imported_data_info.yaml
+    python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run example/calendar_connector.yaml
 
 
 

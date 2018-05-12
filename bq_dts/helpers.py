@@ -165,7 +165,6 @@ def normalize_transfer_run(transfer_run, integer_params=None):
     out_params = protobuf_struct_to_python_dict(out_transfer_run['params'])
 
     # Step 2 - For BQ DTS specifically, cast explicit params to integers
-    #
     for int_param in integer_params:
         out_params[int_param] = int(out_params[int_param])
 

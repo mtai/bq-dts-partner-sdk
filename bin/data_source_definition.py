@@ -43,7 +43,7 @@ class CommandLinePartnerDTSClient(object):
         assert body_yaml_path.exists()
 
         with body_yaml_path.open() as body_fp:
-            self._body = yaml.load(body_fp)
+            self._body = yaml.load(body_fp)['data_source_definition']
 
     def run(self, args=None):
         self.setup_args()

@@ -58,7 +58,6 @@ import functools
 import logging
 import sys
 import tempfile
-import traceback
 from typing import List
 
 import google.auth
@@ -78,8 +77,8 @@ from bq_dts import helpers
 
 yaml = YAML(typ='safe')
 
-MAX_TRANSFER_RUN_SECONDS = 12 * 60.0 * 60.0 # 12 hours
-DEFAULT_UPDATE_INTERVAL_SECS = 60                    # 1 minute
+MAX_TRANSFER_RUN_SECS = 12 * 60.0 * 60.0 # 12 hours
+DEFAULT_LOG_FLUSH_SECS = 60                    # 1 minute
 
 # https://cloud.google.com/storage/docs/bucket-locations#available_locations
 BQ_DTS_LOCATION_TO_GCS_LOCATION_MAP = {
@@ -121,7 +120,7 @@ class TransferRunLogger(logging.Handler):
             return
 
         # Convert record to UTC time
-        raw_datetime = datetime.datetime.fromtimestamp(record.created)
+        raw_datetime = datetime.datetime.utcfromtimestamp(record.created)
         msg_time = rest_client.to_zulu_time(raw_datetime)
         msg_text = self.format(record)
 
@@ -142,7 +141,7 @@ class ManagedTransferRun(object):
     logger_cls = TransferRunLogger
 
     def __init__(self, transfer_run=None, dts_client=None, logger=None,
-                 update_interval=DEFAULT_UPDATE_INTERVAL_SECS, timeout=MAX_TRANSFER_RUN_SECONDS):
+                 log_flush_secs=DEFAULT_LOG_FLUSH_SECS, timeout=MAX_TRANSFER_RUN_SECS):
         self.transfer_run = transfer_run
         self.dts_client = dts_client
 
@@ -163,12 +162,12 @@ class ManagedTransferRun(object):
         self.run_logger.addHandler(self._log_handler)
 
         # Setup timers to...
-        # 1 - Update BQ DTS on a periodic basis
+        # 1 - Flush logs to BQ DTS on a periodic basis
         # 2 - Specify a time-out at the TransferRun level
-        self._timer_update_bq_dts = helpers.RepeatedTimer(update_interval, self._update_bq_dts)
+        self._timer_log_flush_to_bq_dts = helpers.RepeatedTimer(log_flush_secs, self._log_flush)
         self._timer_timeout = helpers.RepeatedTimer(timeout, self._timeout)
 
-    def _update_bq_dts(self):
+    def _log_flush(self):
         """
         Periodically flush self.run_logger to BQ DTS TransferRun.LogMessages
 
@@ -188,7 +187,7 @@ class ManagedTransferRun(object):
         self.logger.info(f'[{self.name}] [STARTING]')
 
         # Step 1 - Start update BQ DTS and run timeout timers
-        self._timer_update_bq_dts.start()
+        self._timer_log_flush_to_bq_dts.start()
         self._timer_timeout.start()
 
         # Step 2 - If we don't have a BQ DTS client, stop now
@@ -212,7 +211,7 @@ class ManagedTransferRun(object):
     def __exit__(self, exc_type, exc, exc_tb):
         # Step 1 - Stop timers
         self._timer_timeout.stop()
-        self._timer_update_bq_dts.stop()
+        self._timer_log_flush_to_bq_dts.stop()
 
         # Step 3 - Short-circuit immediately and die if we experience a BQ DTS API exception
         if isinstance(exc, errors.HttpError):
@@ -224,7 +223,7 @@ class ManagedTransferRun(object):
         # Step 5 - Notify BQ DTS of run completion
         if self.dts_client:
             # Step 5a - Update BQ DTS immediately
-            self._timer_update_bq_dts.run_now()
+            self._timer_log_flush_to_bq_dts.run_now()
 
             # Step 5b - If there's a crash, mark TransferState as FAILED
             if is_exception:
@@ -262,7 +261,7 @@ def templatize_table_name(table_template, run_ctx: ManagedTransferRun):
     table_params['user_id'] = run_ctx.transfer_run['user_id']
     return table_template.format(**table_params)
 
-def table_stager(idi_config_name):
+def table_stager(idi_config_name, table_template=None):
     """Convenience decorator - Removes standard boilerplate for table staging functions
 
      Simplifies table loader function to
@@ -280,13 +279,13 @@ def table_stager(idi_config_name):
             assert isinstance(self, BaseConnector)
 
             # Step 1 - Pull ImportedDataInfo from the IDI Configs
-            current_idi = self._idi_config[idi_config_name]
+            current_idi = self._connector_config['imported_data_info'][idi_config_name]
 
             # Step 2 - Extract the table name templates
-            table_template = current_idi['destination_table_id_template']
+            chosen_table_template = table_template or current_idi['destination_table_id_template']
 
             # Step 3 - Templatize the table name based on 'params', 'run_date', and 'user_id'
-            table_name = templatize_table_name(table_template, run_ctx)
+            table_name = templatize_table_name(chosen_table_template, run_ctx)
 
             # Step 4 - Get the URIs spat out by this function
             uris = decorated_fxn(self, run_ctx, *method_args, **method_kwargs)
@@ -303,9 +302,6 @@ def table_stager(idi_config_name):
 ##### END - _Connector implementation helpers #####
 
 class BaseConnector(object):
-    TRANSFER_RUN_REQUIRED_PARAMS = set()
-    TRANSFER_RUN_INTEGER_PARAMS = []
-
     ##### BEGIN - Methods to script init options #####
     def __init__(self, credentials=None):
         # Setup GCP Clients
@@ -315,7 +311,9 @@ class BaseConnector(object):
         self._dts_client = None
 
         # Setup pre-built RecordSchemas
-        self._idi_config = None
+        self._connector_config = None
+        self._required_params_set = None
+        self._integer_params_set = None
 
         default_credentials, self._partner_project_id = google.auth.default()
         self._credentials = credentials or default_credentials
@@ -326,13 +324,20 @@ class BaseConnector(object):
         self._parser = argparse.ArgumentParser()
 
         # Args used for testing/production workloads
-        self._parser.add_argument('idi_config', type=path.Path, help='Path to ImportedDataInfo.yaml config file')
+        self._parser.add_argument('connector_config', type=path.Path, help='Path to connector.yaml config file')
         self._parser.add_argument('--local-tmpdir', dest='local_tmpdir', type=path.Path, default=tempfile.gettempdir(),
                                   help='Local staging path')
         self._parser.add_argument('--gcs-tmpdir', dest='gcs_tmpdir', type=path.Path, required=True,
                                   help='GCS staging path - "gs://staging-bucket/staging-blob-prefix"')
         self._parser.add_argument('--gcs-overwrite', dest='gcs_overwrite', action='store_true', default=False,
                                   help='Overwrite existing GCS objects if present')
+
+        # Args for controlling background timers
+        self._parser.add_argument('--max-transfer-run-secs', dest='max_transfer_run_secs',
+                                  type=int, default=MAX_TRANSFER_RUN_SECS,
+                                  help='Max seconds we can spend processing a TransferRun before raising a TimeoutError')
+        self._parser.add_argument('--log-flush-secs', dest='log_flush_secs', type=int, default=DEFAULT_LOG_FLUSH_SECS,
+                                  help='Seconds before flushing logs to BQ DTS')
 
         # Args used for testing
         self._parser.add_argument('--transfer-run-yaml', dest='transfer_run_yaml', type=path.Path,
@@ -342,32 +347,33 @@ class BaseConnector(object):
         self._parser.add_argument('--ps-subname', dest='ps_subname',
                                   help='Subscription name in the format of "bigquerydatatransfer.{data_source_id}.{location_id}.run"')
 
-        self._parser.add_argument('--max-transfer-runs', dest='max_transfer_runs', type=int, default=sys.maxsize,
-                                  help='Max number of TransferRuns before gracefully shutting down this process')
-        self._parser.add_argument('--max-transfer-run-seconds', dest='max_transfer_run_seconds', type=int, default=MAX_TRANSFER_RUN_SECONDS,
-                                  help='Max seconds we can spend processing a TransferRun before raising a TimeoutError')
-
-        self._parser.add_argument('--update-interval', dest='update_interval', type=int, default=DEFAULT_UPDATE_INTERVAL_SECS,
-                                  help='Seconds between updates sent to BQ DTS.  Should be <= DataSource.update_deadline_seconds')
-
-        self._parser.add_argument('--use-bq-dts', dest='use_bq_dts', action='store_true', default=False,
-                                  help='Use the BigQuery Data Transfer Service APIs')
 
     def process_args(self, args=None):
         # Step 1 - Parse args
         self._opts = self._parser.parse_args(args=args)
 
         # Step 2 - Load ImportedDataInfo config file
-        idi_config_path = self._opts.idi_config.abspath()
-        with idi_config_path.open() as idi_config_fp:
-            self._idi_config = yaml.load(idi_config_fp)
+        connector_config_path = self._opts.connector_config.abspath()
+        with connector_config_path.open() as connector_config_fp:
+            self._connector_config = yaml.load(connector_config_fp)
 
-        # Step 3 - Set is_testing flag
-        self._is_testing = any([self._opts.transfer_run_yaml, not self._opts.ps_subname, not self._opts.use_bq_dts])
+        # Step 3 - Data Source Definintion parsing
+        data_source_dict = self._connector_config['data_source_definition']['data_source']
+        self._required_params_set = {
+            current_param['param_id'] for current_param in data_source_dict['parameters'] if current_param.get('required')
+        }
+        self._integer_params_set = {
+            current_param['param_id'] for current_param in data_source_dict['parameters'] if current_param['type'] == 'INTEGER'
+        }
 
-        # Step 4 - Sanity check our args
-        assert not (self._is_testing and self._opts.use_bq_dts), 'Cannot be testing while simultaneously using BQ DTS APIs'
-        assert self._opts.update_interval <= self._opts.max_transfer_run_seconds
+
+        self._is_testing = bool(self._opts.transfer_run_yaml)
+
+        # Step 5 - Validate args
+        assert self._opts.transfer_run_yaml or self._opts.ps_subname
+        assert self._opts.log_flush_secs <= self._opts.max_transfer_run_secs
+        # assert self._opts.max_transfer_run_secs <= data_source_dict['update_deadline_seconds']
+
     ##### END - Methods to script init options #####
 
 
@@ -376,12 +382,10 @@ class BaseConnector(object):
         self.setup_args()
         self.process_args(args=args)
 
-        if self._opts.ps_subname:
-            self.trigger_via_pubsub()
-        elif self._opts.transfer_run_yaml:
+        if self._is_testing:
             self.trigger_via_file()
         else:
-            raise NotImplementedError
+            self.trigger_via_pubsub()
 
     def trigger_via_file(self):
         self.logger.info(f'Triggering via file - {self._opts.transfer_run_yaml}')
@@ -393,7 +397,7 @@ class BaseConnector(object):
 
         # Step 3 - Setup a ManagedTransferRun
         with ManagedTransferRun(current_run, dts_client=self.dts_client, logger=self.logger,
-            update_interval=self._opts.update_interval, timeout=self._opts.max_transfer_run_seconds) as run_ctx:
+                                log_flush_secs=self._opts.log_flush_secs, timeout=self._opts.max_transfer_run_secs) as run_ctx:
             self.process_transfer_run(run_ctx)
 
     def trigger_via_pubsub(self):
@@ -403,7 +407,7 @@ class BaseConnector(object):
 
         # Step 2 - Setup the Subscription-specific callback, listening for 1 message at a time
         # https://google-cloud-python.readthedocs.io/en/latest/pubsub/subscriber/index.html#pulling-a-subscription
-        default_fc = pubsub.types.FlowControl(max_messages=1, max_lease_duration=self._opts.max_transfer_run_seconds)
+        default_fc = pubsub.types.FlowControl(max_messages=1, max_lease_duration=self._opts.max_transfer_run_secs)
         future = self.ps_sub_client.subscribe_experimental(sub_path,
             callback=self.pubsub_callback, flow_control=default_fc)
 
@@ -423,8 +427,10 @@ class BaseConnector(object):
         # Step 3 - Setup a ManagedTransferRun
         retry_transfer_run = False
         try:
-            with ManagedTransferRun(current_run, dts_client=self.dts_client, logger=self.logger,
-                update_interval=self._opts.update_interval, timeout=self._opts.max_transfer_run_seconds) as run_ctx:
+            with ManagedTransferRun(current_run,
+                                    dts_client=self.dts_client, logger=self.logger,
+                                    log_flush_secs=self._opts.log_flush_secs,
+                                    timeout=self._opts.max_transfer_run_secs) as run_ctx:
                 self.process_transfer_run(run_ctx)
         except errors.HttpError as dts_api_error:
             # Step 4a - If there's an unrecoverable BQ DTS API error...
@@ -447,14 +453,14 @@ class BaseConnector(object):
             ps_message.ack()
 
     def validate_transfer_run_params(self, transfer_run_params):
-        assert self.TRANSFER_RUN_REQUIRED_PARAMS <= set(transfer_run_params)
+        assert self._required_params_set <= set(transfer_run_params)
         return transfer_run_params
 
     def process_transfer_run(self, run_ctx):
         # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#transferrun
         # Step 1 - Normalize the RPC-based Transfer Run
         run_ctx.transfer_run = helpers.normalize_transfer_run(run_ctx.transfer_run,
-            integer_params=self.TRANSFER_RUN_INTEGER_PARAMS)
+            integer_params=self._integer_params_set)
 
         # Step 2 - Parse TransferRun Params specific to this Connector
         run_ctx.transfer_run['params'] = self.validate_transfer_run_params(run_ctx.transfer_run['params'])
@@ -469,10 +475,10 @@ class BaseConnector(object):
             return
 
         self.logger.info(f'[{run_ctx.name}] [LOADING]')
-        if self._opts.use_bq_dts:
-            self.start_bigquery_jobs_via_dts_apis(run_ctx, gcs_table_ctxs)
-        else:
+        if self._is_testing:
             self.start_bigquery_jobs_via_bq_apis(run_ctx, gcs_table_ctxs)
+        else:
+            self.start_bigquery_jobs_via_dts_apis(run_ctx, gcs_table_ctxs)
     ##### END - Methods to initiate TransferRun processing #####
 
 
@@ -486,10 +492,9 @@ class BaseConnector(object):
         :param run_ctx:
         :return:
         """
-        # Step 1 - Stage local tables @ /tmp/{data_source_id}/{config_id}/{run_id}/{YYYYMMDD-HHMMSS}
+        # Step 1 - Stage local tables @ /tmp/{data_source_id}/{config_id}/{run_id}/
         local_prefix = self._opts.local_tmpdir.joinpath(
-            run_ctx.data_source_id, run_ctx.config_id, run_ctx.run_id,
-            run_ctx.time_start_processing.strftime('%Y%m%d-%H%M%S')
+            run_ctx.data_source_id, run_ctx.config_id, run_ctx.run_id
         )
 
         self.logger.info(f'[{run_ctx.name}] Staging local => {local_prefix}')
@@ -597,7 +602,7 @@ class BaseConnector(object):
 
     @property
     def dts_client(self):
-        if not self._opts.use_bq_dts:
+        if self._is_testing:
             return None
 
         if not self._dts_client:
