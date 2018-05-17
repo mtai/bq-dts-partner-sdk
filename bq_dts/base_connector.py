@@ -229,11 +229,10 @@ class ManagedTransferRun(object):
             if is_exception:
                 self.dts_client.transfer_run_patch_state(self.name, rest_client.TransferState.FAILED)
                 self.logger.info(f'[{self.name}] BQ DTS ; Finishing Run - FAILED')
+            # Step 5c - Otherwise, let DTS know we as a source are done with the run
             else:
+                self.dts_client.transfer_run_finish_run(self.name)
                 self.logger.info(f'[{self.name}] BQ DTS ; Finishing Run - SUCCESS')
-
-            # Step 5c - Finish the run
-            self.dts_client.transfer_run_finish_run(self.name)
 
         # Step 6 - Raise an exception IF there is a regular exception, not a DTS API exception
         self.logger.info(f'[{self.name}] [FINISHED]')
