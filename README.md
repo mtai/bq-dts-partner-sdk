@@ -19,30 +19,31 @@ You will need to do the following:
 
 3. Create an IAM Service Account and download credentials for use with your source.  Running these commands
     1. Creates a new Service Account named `bq-dts-[SOURCE]@[PROJECT_ID].iam.gserviceaccount.com`
-    2. Grants roles `bigquery.admin`, `pubsub.subscriber`, `storage.objectAdmin`
+    2. Grants `roles/bigquery.admin`, `roles/pubsub.subscriber`, `roles/storage.objectAdmin`
     3. Downloads a Service-Account key called `.gcp-service-account.json`
 
     ```
-    SOURCE="example-calendar" # REPLACE THIS VARIABLE
+    SOURCE="example-source"
     PROJECT_ID=$(gcloud config get-value core/project)
     PARTNER_SA_NAME="bq-dts-${SOURCE}"
     PARTNER_SA_EMAIL="${PARTNER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-
+    
     # Creating a Service Account
-    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME}
-
+    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME} 
+    
      # Granting Service Account required roles
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/bigquery.admin'
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/pubsub.subscriber'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/storage.objectAdmin'
-    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/editor'
-
-
+    
+    
     # Optionally create service account credentials
-    gcloud iam service-accounts keys create --iam-account "${PARTNER_SA_EMAIL}" .gcp-service-account.json
+    gcloud iam service-accounts keys create --iam-account "${SERVICE_ACCOUNT_EMAIL}" .gcp-service-account.json
     ```
 
 4. Grant permissions to a GCP-managed Service Account
     1. Creates a custom role - `bigquerydatatransfer.connector` with permission `clientauthconfig.clients.getWithSecret`
-    2. Grants roles `bigquerydatatransfer.connector`, `pubsub.admin`
+    2. Grants project-specific role `bigquerydatatransfer.connector`
 
     ```
     PROJECT_ID=$(gcloud config get-value core/project)
@@ -53,10 +54,12 @@ You will need to do the following:
 
     # Granting Service Account required roles
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="projects/${PROJECT_ID}/roles/bigquerydatatransfer.connector"
-    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="roles/pubsub.admin"
     ```
 
-5. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
+5. Create an [OAuth Consent Screen](https://support.google.com/cloud/answer/6158849?hl=en#userconsent)
+
+6. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
+
 
 ## Running locally on Mac OS X (no K8s)
 ### Install dependencies
@@ -90,12 +93,18 @@ You will need to do the following:
 ### Working with Google Cloud Platform auth
 Prior to using the below examples, ensure you have set the following environment variables
 
-* GOOGLE_APPLICATION_CREDENTIALS={path-to/.gcp-service-account.json}
 * GOOGLE_CLOUD_PROJECT={project-id}
 * PYTHONPATH=<path_to_folder>
 
 ### Working with Data Source Definitions
+When working with Data Source Definitions, you must authenticate as a user with role `Project Editor (roles/editor)`.
 
+* OAuth client create and list
+    * clientauthconfig.clients.create
+    * clientauthconfig.clients.list
+* Pub/Sub Admin (roles/pubsub.admin)
+
+    ```
     # Create
     python bin/data_source_definition.py --project-id {project_id} --location-id us --body-yaml example/calendar_connector.yaml create
 
@@ -107,16 +116,20 @@ Prior to using the below examples, ensure you have set the following environment
 
     # Patch
     python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/calendar_connector.yaml patch
-
+    ```
 
 ### Running the example app, serving BQ DTS requests
+When serving BQ DTS requests, you should pass the credentials of the IAM Service Account setup in Step 4 of Before you begin.
 
+* GOOGLE_APPLICATION_CREDENTIALS={path-to/.gcp-service-account.json}
+
+    ```
     # Development
     python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --transfer-run-yaml example/transfer_run.yaml example/calendar_connector.yaml
 
     # Production
     python example/calendar_connector.py --gcs-tmpdir gs://{gcs_bucket}/{blob_prefix}/ --ps-subname bigquerydatatransfer.{datasource-id}.{location-id}.run example/calendar_connector.yaml
-
+    ```
 
 
 ## Building remotely on GKE-managed K8s cluster
