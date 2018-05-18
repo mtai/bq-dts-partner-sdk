@@ -232,7 +232,6 @@ class ParameterType(Enum):
     INTEGER = 'INTEGER'
     DOUBLE = 'DOUBLE'
     BOOLEAN = 'BOOLEAN'
-    RECORD = 'RECORD'
     PLUS_PAGE = 'PLUS_PAGE'
 
 
@@ -275,14 +274,11 @@ def DataSource(name=None, data_source_id=None, display_name=None, description=No
     return ds_rest
 
 
-def DataSourceParameter(param_id=None, display_name=None, description=None, type=None, required=None, repeated=None,
-                        validation_regex=None, allowed_values=None, min_value=None, max_value=None, fields=None,
-                        validation_description=None, validation_help_url=None, immutable=None, recurse=None):
+def DataSourceParameter(param_id=None, display_name=None, description=None, type=None, required=None,
+                        validation_regex=None, allowed_values=None, min_value=None, max_value=None,
+                        validation_description=None, validation_help_url=None, immutable=None):
     assert type in ParameterType
     param_rest = dict_to_camel_case(locals())
-    if 'fields' in param_rest:
-        param_rest['fields'] = [DataSourceParameter(**current_param) for current_param in param_rest['fields']]
-
     return param_rest
 ##### END - DataSource Helpers #####
 
