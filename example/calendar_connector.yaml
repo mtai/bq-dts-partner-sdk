@@ -13,8 +13,9 @@ data_source_definition:
 
   # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#datasource
   data_source:
-    display_name: Calendar
-    description: Calendar Data Source
+    display_name: Calendar (debug)
+    description: Calendar Data Source (debug)
+    partner_legal_name: Example Legal Entity Name LLC
     help_url: https://en.wikipedia.org/wiki/Gregorian_calendar
 
     # Automatically mark a TransferRun as FAILED if "update_deadline_seconds" elapses without an "update"... "update" can be triggered below

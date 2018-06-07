@@ -97,7 +97,7 @@ Prior to using the below examples, ensure you have set the following environment
 * PYTHONPATH=<path_to_folder>
 
 ### Working with Data Source Definitions
-When working with Data Source Definitions, you must authenticate as a user with role `Project Editor (roles/editor)`.
+When working with Data Source Definitions, you must authenticate as a Service Account with role `Project Owner (roles/owner)`.
 
 * OAuth client create and list
     * clientauthconfig.clients.create

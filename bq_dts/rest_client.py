@@ -78,6 +78,10 @@ def to_camel_case(snake_str):
     return components[0] + ''.join(x.title() for x in components[1:])
 
 
+def rpc_duration_to_rest_duration(in_duration):
+    return f'{in_duration["seconds"]}s'
+
+
 class MetaEnum(type):
     def __contains__(cls, item):
         return bool(item is None) or bool(item in cls.__dict__)
@@ -250,18 +254,20 @@ class DataRefreshType(Enum):
 
 
 ##### BEGIN - DataSource Helpers #####
-def DataSourceDefinition(name=None, data_source=None, transfer_run_pubsub_topic=None, run_delay=None,
+def DataSourceDefinition(name=None, data_source=None, transfer_run_pubsub_topic=None,
                          run_time_offset=None, support_email=None, disabled=None, supported_location_ids=None):
     dsd_rest = dict_to_camel_case(locals())
     if 'dataSource' in dsd_rest:
         dsd_rest['dataSource'] = DataSource(**dsd_rest['dataSource'])
+    if 'runTimeOffset' in dsd_rest:
+        dsd_rest['runTimeOffset'] = rpc_duration_to_rest_duration(run_time_offset)
     return dsd_rest
 
 
 def DataSource(name=None, data_source_id=None, display_name=None, description=None, client_id=None, scopes=None,
                update_deadline_seconds=None, default_schedule=None, supports_custom_schedule=None, parameters=None,
                help_url=None, authorization_type=None, data_refresh_type=None, default_data_refresh_window_days=None,
-               manual_runs_disabled=None, minimum_schedule_interval=None):
+               manual_runs_disabled=None, minimum_schedule_interval=None, partner_legal_name=None):
 
     assert authorization_type in AuthorizationType
     assert data_refresh_type in DataRefreshType
@@ -271,6 +277,8 @@ def DataSource(name=None, data_source_id=None, display_name=None, description=No
         ds_rest['parameters'] = [
             DataSourceParameter(**current_param) for current_param in ds_rest['parameters']
         ]
+    if 'minimumScheduleInterval' in ds_rest:
+        ds_rest['minimumScheduleInterval'] = rpc_duration_to_rest_duration(minimum_schedule_interval)
     return ds_rest
 
 
