@@ -1,6 +1,6 @@
 # PubSub and GCS API
 google-cloud-storage==1.8.0
-google-cloud-pubsub==0.34.0
+google-cloud-pubsub==0.35.4
 google-cloud-bigquery==1.0.0
 google-cloud-bigquery-datatransfer==0.1.1
 google-api-python-client==1.6.6

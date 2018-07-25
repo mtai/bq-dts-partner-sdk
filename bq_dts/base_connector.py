@@ -407,8 +407,7 @@ class BaseConnector(object):
         # Step 2 - Setup the Subscription-specific callback, listening for 1 message at a time
         # https://google-cloud-python.readthedocs.io/en/latest/pubsub/subscriber/index.html#pulling-a-subscription
         default_fc = pubsub.types.FlowControl(max_messages=1, max_lease_duration=self._opts.max_transfer_run_secs)
-        future = self.ps_sub_client.subscribe_experimental(sub_path,
-            callback=self.pubsub_callback, flow_control=default_fc)
+        future = self.ps_sub_client.subscribe(sub_path, callback=self.pubsub_callback, flow_control=default_fc)
 
         # Step 3 - Block until exception, subscribe uses threads to continue progress
         future.result()
