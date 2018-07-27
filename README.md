@@ -27,16 +27,16 @@ You will need to do the following:
     PROJECT_ID=$(gcloud config get-value core/project)
     PARTNER_SA_NAME="bq-dts-${SOURCE}"
     PARTNER_SA_EMAIL="${PARTNER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
-    
+
     # Creating a Service Account
-    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME} 
-    
+    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME}
+
      # Granting Service Account required roles
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/bigquery.admin'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/pubsub.subscriber'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/storage.objectAdmin'
-    
-    
+
+
     # Optionally create service account credentials
     gcloud iam service-accounts keys create --iam-account "${SERVICE_ACCOUNT_EMAIL}" .gcp-service-account.json
     ```
@@ -116,6 +116,9 @@ When working with Data Source Definitions, you must authenticate as a Service Ac
 
     # Patch
     python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} --update-mask supportedLocationIds,dataSource.updateDeadlineSeconds --body-yaml example/calendar_connector.yaml patch
+
+    # Delete
+    python bin/data_source_definition.py --project-id {project_id} --location-id us --data-source-id {data_source_id} delete
     ```
 
 ### Running the example app, serving BQ DTS requests
