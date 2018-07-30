@@ -393,6 +393,10 @@ class PartnerDTSClient(object):
         dsd_body = DataSourceDefinition(**body)
         return self._data_source_definition_api_call('patch', name=name, updateMask=update_mask, body=dsd_body)
 
+    def data_source_definition_delete(self, name=None):
+        # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rest/v1/projects.locations.dataSourceDefinitions/delete
+        return self._data_source_definition_api_call('delete', name=name)
+
     @classmethod
     def data_source_definition_path(cls, project_id=None, location_id=None, data_source_id=None):
         if data_source_id:
