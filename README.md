@@ -17,7 +17,7 @@ You will need to do the following:
     gcloud services enable pubsub.googleapis.com
     ```
 
-3. Create an IAM Service Account and download credentials for use with your source.  Running these commands
+3. Create an operational IAM Service Account and download credentials for running your source.  Running these commands
     1. Creates a new Service Account named `bq-dts-[SOURCE]@[PROJECT_ID].iam.gserviceaccount.com`
     2. Grants `roles/bigquery.admin`, `roles/pubsub.subscriber`, `roles/storage.objectAdmin`
     3. Downloads a Service-Account key called `.gcp-service-account.json`
@@ -36,12 +36,29 @@ You will need to do the following:
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/pubsub.subscriber'
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/storage.objectAdmin'
 
-
-    # Optionally create service account credentials
+    # Create service account credentials and store it locally needed for starting/running data sources.
     gcloud iam service-accounts keys create --iam-account "${SERVICE_ACCOUNT_EMAIL}" .gcp-service-account.json
     ```
 
-4. Grant permissions to a GCP-managed Service Account
+4. Create an administrative IAM Service Account and store credentials locally for creating data source.
+    1. Creates a new Service Account named `bq-dts-admin@[PROJECT_ID].iam.gserviceaccount.com`
+    2. Grants `roles/project.owner`
+    3. Downloads a Service-Account key called `.gcp-service-account.json`
+
+    ```
+    PROJECT_ID=$(gcloud config get-value core/project)
+    PARTNER_SA_NAME="bq-dts-admin"
+    PARTNER_SA_EMAIL="${PARTNER_SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+    # Creating a Service Account
+    gcloud iam service-accounts create ${PARTNER_SA_NAME} --display-name ${PARTNER_SA_NAME}
+    gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/owner'
+
+    # Create service account credentials and store it locally needed for creating data source
+    gcloud iam service-accounts keys create --iam-account "${PARTNER_SA_EMAIL}" .gcp-service-account-owner.json
+    ```
+
+5. Grant permissions to a GCP-managed Service Account
     1. Creates a custom role - `bigquerydatatransfer.connector` with permission `clientauthconfig.clients.getWithSecret`
     2. Grants project-specific role `bigquerydatatransfer.connector`
 
@@ -56,9 +73,9 @@ You will need to do the following:
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${GCP_SA_EMAIL}" --role="projects/${PROJECT_ID}/roles/bigquerydatatransfer.connector"
     ```
 
-5. Create an [OAuth Consent Screen](https://support.google.com/cloud/answer/6158849?hl=en#userconsent)
+6. Create an [OAuth Consent Screen](https://support.google.com/cloud/answer/6158849?hl=en#userconsent)
 
-6. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
+7. Join BigQuery Data Transfer Service Partner-level whitelists.  Reach out to your Google Cloud Platform contact to get whitelisted for these APIs.
 
 
 ## Running locally on Mac OS X (no K8s)
@@ -94,10 +111,12 @@ You will need to do the following:
 Prior to using the below examples, ensure you have set the following environment variables
 
 * GOOGLE_CLOUD_PROJECT={project-id}
-* PYTHONPATH=<path_to_folder>
+* PYTHONPATH=<path_to_folder_where_virtualenv_is_set>
 
 ### Working with Data Source Definitions
-When working with Data Source Definitions, you must authenticate as a Service Account with role `Project Owner (roles/owner)`.
+When working with Data Source Definitions, you must authenticate as the Administrative Service Account with role `Project Owner (roles/owner)`.
+
+* GOOGLE_APPLICATION_CREDENTIALS={path-to/.gcp-service-account-owner.json}
 
 * OAuth client create and list
     * clientauthconfig.clients.create
@@ -122,7 +141,7 @@ When working with Data Source Definitions, you must authenticate as a Service Ac
     ```
 
 ### Running the example app, serving BQ DTS requests
-When serving BQ DTS requests, you should pass the credentials of the IAM Service Account setup in Step 4 of Before you begin.
+When serving BQ DTS requests, you should pass the credentials of the Operational IAM Service Account setup in Step 4 of Before you begin.
 
 * GOOGLE_APPLICATION_CREDENTIALS={path-to/.gcp-service-account.json}
 
