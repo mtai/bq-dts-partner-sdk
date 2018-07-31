@@ -59,8 +59,8 @@ class CommandLinePartnerDTSClient(object):
             assert self._opts.data_source_id
             name = _format_dsd(self._opts)
             resp = self._dts_client.data_source_definition_get(name=name)
-        elif self._ops.method == 'delete':
-            assert = _format_dsd(self.opts)
+        elif self._opts.method == 'delete':
+            name = _format_dsd(self._opts)
             resp = self._dts_client.data_source_definition_delete(name=name)
         elif self._opts.method == 'patch':
             assert self._opts.data_source_id
