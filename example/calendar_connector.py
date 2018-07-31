@@ -187,10 +187,9 @@ class CalendarConnector(base_connector.BaseConnector):
         # Step 3 - Instead of calling APIs, programmatically generate tables
         today = datetime.datetime.today()
         with helpers.GzippedJSONWriter(output_uri) as output_file:
-            current_datetime = today.replace(hour=0, minute=0, second=0)
+            current_datetime = today.replace(hour=0, minute=0, second=0, microsecond=0)
             for _ in range(TIME_SECONDS_IN_DAY):
                 output_file.write(datetime_to_time_dict(current_datetime))
-
                 current_datetime += offset_one_second
 
         return [output_uri]
