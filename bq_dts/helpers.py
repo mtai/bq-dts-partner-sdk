@@ -148,7 +148,7 @@ def normalize_transfer_run(transfer_run, integer_params=None):
     """
     1) Converts TransferRun.params - Protobuf Structs to Python dict
     2) Casts TransferRun.params integers to ints
-    3) Converstions TransferRun.{timestamp_fields} from RPCTimestamp to Python Datetime
+    3) Converts TransferRun.{timestamp_fields} from RPCTimestamp to Python Datetime
 
     :param transfer_run:
     :param integer_params:
