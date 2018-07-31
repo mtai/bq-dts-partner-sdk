@@ -162,6 +162,8 @@ def normalize_transfer_run(transfer_run, integer_params=None):
     #   param_name: {string_value: '1901-01-01'}
     # TO
     #   param_name: '1901-01-01'
+    if not 'params' in transfer_run or not out_transfer_run['params']:
+        out_transfer_run['params'] = None
     out_params = protobuf_struct_to_python_dict(out_transfer_run['params'])
 
     # Step 2 - For BQ DTS specifically, cast explicit params to integers
@@ -179,6 +181,9 @@ def normalize_transfer_run(transfer_run, integer_params=None):
 
 def protobuf_struct_to_python_dict(raw_struct):
     # https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#struct
+    if raw_struct is None:
+        return raw_struct
+
     output_dict = dict()
     for var_name, var_value in raw_struct['fields'].items():
         output_dict[var_name] = _struct_value_to_python_value(var_value)
