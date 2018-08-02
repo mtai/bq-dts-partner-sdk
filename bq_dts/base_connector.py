@@ -492,7 +492,7 @@ class BaseConnector(object):
         """
         # Step 1 - Stage local tables @ /tmp/{data_source_id}/{config_id}/{run_id}/
         local_prefix = self._opts.local_tmpdir.joinpath(
-            run_ctx.data_source_id, run_ctx.config_id, run_ctx.run_id
+            run_ctx.data_source_id, run_ctx.config_id, run_ctx.run_id or 'no_run_id'
         )
 
         self.logger.info(f'[{run_ctx.name}] Staging local => {local_prefix}')
