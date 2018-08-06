@@ -254,6 +254,7 @@ def templatize_table_name(table_template, run_ctx: ManagedTransferRun):
     run_time = run_ctx.transfer_run['run_time']
 
     table_params = copy.deepcopy(run_ctx.transfer_run['params'])
+    table_params = table_params or dict()
 
     table_params['run_time'] = run_time
     table_params['run_yyyymmmdd'] = f'{run_time:%Y%m%d}'
@@ -358,6 +359,9 @@ class BaseConnector(object):
 
         # Step 3 - Data Source Definintion parsing
         data_source_dict = self._connector_config['data_source_definition']['data_source']
+        # If there are no parameters create one to avoid a null check.
+        data_source_dict['parameters'] = data_source_dict['parameters'] or dict()
+
         self._required_params_set = {
             current_param['param_id'] for current_param in data_source_dict['parameters'] if current_param.get('required')
         }
