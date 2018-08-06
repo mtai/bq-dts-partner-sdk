@@ -79,6 +79,9 @@ data_source_definition:
       max_value: 999999
       validation_help_url: https://en.wikipedia.org/wiki/Integer
 
+# All data info below are not needed for creating a data source. They are here for only for
+# running the data source purpose used in this SDK. Alternatively, the imported_data_info can
+# be specificed in the data source implementation while before loading the BigQuery job.
 imported_data_info:
   # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#importeddatainfo
   date_greg:
