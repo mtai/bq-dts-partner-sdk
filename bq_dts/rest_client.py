@@ -329,11 +329,20 @@ class PartnerDTSClient(object):
         )
         return base_api_fxn.execute()
 
-    def get_credentials(self, location_id=None, data_source_id=None):
-        base_api_fxn = self._rest_client.projects().locations().dataSources().credentials(
-            project_id='-',
-            location_id=location_id,
-            data_source_id=data_source_id,
+    def get_credentials(self, location_id, data_source_id, user_id):
+        """
+        Get user authentication token so that the data source can perform
+        operations on behalf of the user. Can only be called by configured
+        data source service account. In all other cases - it will fail
+        with permission denied error.
+        :param location_id:
+        :param data_source_id:
+        :param user_id:
+        :return:
+        """
+        # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rest/v1/projects.locations.dataSources.credentials/get
+        base_api_fxn = self._rest_client.projects().locations().dataSources().credentials().get(
+            name='projects/-/locations/{}/dataSources/{}/credentials/{}'.format(location_id, data_source_id, user_id)
         )
         return base_api_fxn.execute()
 
