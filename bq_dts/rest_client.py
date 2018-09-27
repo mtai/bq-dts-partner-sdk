@@ -145,6 +145,13 @@ class BQType(Enum):
     NUMERIC = 'NUMERIC'
 
 
+class WriteDisposition(Enum):
+    # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#writedisposition
+    WRITE_DISPOSITION_UNSPECIFIED = 'WRITE_DISPOSITION_UNSPECIFIED'
+    WRITE_TRUNCATE = 'WRITE_TRUNCATE'
+    WRITE_APPEND = 'WRITE_APPEND'
+
+
 # BQ DTS  - https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#format
 # BQ Load - https://cloud.google.com/bigquery/docs/reference/rest/v2/jobs#configuration.load.sourceFormat
 BQ_DTS_FORMAT_TO_BQ_SOURCE_FORMAT_MAP = {
@@ -179,10 +186,11 @@ def TransferMessage(message_text=None, message_time=None, severity=None):
 
 
 def ImportedDataInfo(sql=None, destination_table_id=None, destination_table_description=None, table_defs=None,
-                     user_defined_functions=None):
+                     user_defined_functions=None, write_disposition=None):
     # https://cloud.google.com/bigquery/docs/reference/data-transfer/partner/rpc/google.cloud.bigquery.datatransfer.v1#importeddatainfo
     assert destination_table_id
     assert type(table_defs) is list
+    assert write_disposition in WriteDisposition
 
     idi_rest = dict_to_camel_case(locals())
     if 'tableDefs' in idi_rest:
@@ -267,7 +275,7 @@ def DataSourceDefinition(name=None, data_source=None, transfer_run_pubsub_topic=
 def DataSource(name=None, data_source_id=None, display_name=None, description=None, client_id=None, scopes=None,
                update_deadline_seconds=None, default_schedule=None, supports_custom_schedule=None, parameters=None,
                help_url=None, authorization_type=None, data_refresh_type=None, default_data_refresh_window_days=None,
-               manual_runs_disabled=None, minimum_schedule_interval=None, partner_legal_name=None):
+               manual_runs_disabled=None, minimum_schedule_interval=None, partner_legal_name=None, redirect_url=None):
 
     assert authorization_type in AuthorizationType
     assert data_refresh_type in DataRefreshType
