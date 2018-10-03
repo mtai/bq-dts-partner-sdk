@@ -182,7 +182,7 @@ def normalize_transfer_run(transfer_run, integer_params=None):
 def protobuf_struct_to_python_dict(raw_struct):
     # https://developers.google.com/protocol-buffers/docs/reference/google.protobuf#struct
     if raw_struct is None:
-        return raw_struct
+        return dict()
 
     output_dict = dict()
     for var_name, var_value in raw_struct['fields'].items():
