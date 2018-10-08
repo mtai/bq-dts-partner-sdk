@@ -37,7 +37,7 @@ You will need to do the following:
     gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${PARTNER_SA_EMAIL}" --role='roles/storage.objectAdmin'
 
     # Create service account credentials and store it locally needed for starting/running data sources.
-    gcloud iam service-accounts keys create --iam-account "${SERVICE_ACCOUNT_EMAIL}" .gcp-service-account.json
+    gcloud iam service-accounts keys create --iam-account "${PARTNER_SA_EMAIL}" .gcp-service-account.json
     ```
 
 4. Create an administrative IAM Service Account and store credentials locally for creating data source.
