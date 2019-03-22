@@ -357,7 +357,7 @@ class BaseConnector(object):
         with connector_config_path.open() as connector_config_fp:
             self._connector_config = yaml.load(connector_config_fp)
 
-        # Step 3 - Data Source Definintion parsing
+        # Step 3 - Data Source Definition parsing
         data_source_dict = self._connector_config['data_source_definition']['data_source']
         # If there are no parameters create one to avoid a null check.
         data_source_dict['parameters'] = data_source_dict['parameters'] or dict()
